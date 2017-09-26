@@ -62,3 +62,4 @@ watchMe/APIs/migrations/
 .DS_Store
 *.sqlite3
 *.db
+celery_pids_logs/*

@@ -144,6 +144,9 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERYD_HIJACK_ROOT_LOGGER = False
 CELERY_PID_LOGS = os.path.join(BASE_DIR, 'celery_pids_logs')
 
+if not os.path.exists(CELERY_PID_LOGS):
+    os.makedirs(CELERY_PID_LOGS)
+
 rules = yara.compile(filepath=os.path.join(BASE_DIR, 'shawky.yara'))
 
 if DEBUG:
