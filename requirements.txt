@@ -1,0 +1,14 @@
+amqp
+celery
+Django
+django-celery-beat
+django-filter
+djangorestframework
+kombu
+python-magic
+six
+watchdog
+yara-python
+psutil
+django-autocomplete-light
+django-celery-email

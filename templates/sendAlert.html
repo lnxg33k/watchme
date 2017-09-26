@@ -1,0 +1,6 @@
+{% extends "admin_copies/base.html" %}
+{% block content %}
+    A malicious file {{ file_path }} was just {{ event_type }} on {{ watcher_name }}
+    {{ hit }}
+{% endblock content %}
+

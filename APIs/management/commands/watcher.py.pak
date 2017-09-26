@@ -1,0 +1,190 @@
+from django.core.management.base import BaseCommand, CommandError
+from django.core.exceptions import ValidationError
+from django.core import management
+
+from watchMe.settings import CELERY_BROKER_URL
+from APIs.models import WatcherConfig
+from APIs.tasks import watch
+from APIs.validators import validators
+
+from kombu import Connection, exceptions
+from celery.task.control import inspect
+from celery.utils.log import get_task_logger
+
+import re
+import subprocess
+import time
+
+logger = get_task_logger(__name__)
+
+
+class Command(BaseCommand):
+    help = 'Start the watcher on a specific directory.'
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '-c', '--command', default='status',
+            choices=['start', 'stop', 'status', 'restart'],
+            help="The command you want to execute.")
+
+        parser.add_argument(
+            'server-name',
+            help="The servername you already set when adding the watcher.")
+
+        parser.add_argument(
+            '--force', action='store_true', dest='force',
+            help='Force executing the command.')
+
+    def start_worker(self, servername, q, c=2, command='start'):
+        i = inspect()
+        self.stdout.write(self.style.NOTICE(
+            '[!] Starting the "{0}" worker.'
+            ' Please wait...'.format(servername))
+        )
+
+        cmd = "celery multi %s -Q %s" % (command, q)
+        cmd += " -A watchMe worker -c %d" % c
+        cmd += " --pidfile='./celery_pids_logs/celery-%s.pid'" % servername
+        cmd += " --logfile='./celery_pids_logs/celery.log'"
+        cmd += " --hostname=%s" % servername
+        cmd += " --purge"
+        cmd += " --loglevel=info"
+
+        subprocess.call(
+            cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        while True:
+            time.sleep(1)
+            if i.ping():
+                if i.active_queues().get('worker@%s' % servername):
+                    break
+
+    def worker_is_up(self, servername):
+        i = inspect(['worker@%s' % servername])
+        return True if i.ping() else False
+
+    def handle(self, *args, **options):
+        servername = options['server-name']
+        force = options['force']
+        command = options['command']
+
+        try:
+            conn = Connection(CELERY_BROKER_URL)
+            conn.ensure_connection(max_retries=1)
+        except exceptions.OperationalError:
+            cburl = re.sub(
+                '(?<=watcher:)(?P<pass>.*?)\W', '***', CELERY_BROKER_URL)
+            raise CommandError(
+                "Failed to connect to RabbitMQ"
+                " instance at {}".format(cburl)
+            )
+        try:
+            watcher = WatcherConfig.objects.get(server_name=servername)
+
+            if command == 'start':
+                # check if the path exists or no
+                try:
+                    validators.validate_share_path(watcher.share_path)
+                except ValidationError:
+                    raise CommandError(
+                        "Tha path \"{0}\" doesn't exists, "
+                        "create it first.".format(watcher.share_path)
+                    )
+
+                i = inspect()
+
+                if i.ping():    # Any worker is up ?
+                    i = i.stats()
+
+                    if i.get('worker@main'):    # celery main queue is UP
+                        worker_is_up = i.get('worker@%s' % servername)
+
+                        if worker_is_up:
+                            pid = i.get('worker@%s' % servername).get('pid')
+                            ps = i.get(
+                                'worker@%s' % servername)['pool']['processes']
+
+                            raise CommandError(
+                                'Watcher is already running under'
+                                ' the following PID "{0}" and the'
+                                ' following processes {1}'.format(pid, ps)
+                            )
+
+                        else:
+                            if not force:
+                                if validators.is_empty_share_path(
+                                        watcher.share_path):
+                                    raise CommandError(
+                                        'The share path "{0}" doesn\'t'
+                                        ' contain files'
+                                        ', if you want to ignore that use,'
+                                        ' --force flag.'.format(
+                                            watcher.share_path)
+                                    )
+                            self.start_worker(
+                                servername=servername, q=servername
+                            )
+
+                    else:
+                        self.start_worker(servername='main', q='celery')
+
+                        if self.worker_is_up(servername):
+                            # Restart the worker in case the worker
+                            # that has the main celery queue died.
+                            self.start_worker(
+                                servername=servername,
+                                q=servername, command='restart')
+
+                else:
+                    self.start_worker(servername='main', q='celery')
+                    self.start_worker(servername=servername, q=servername)
+
+                watch.apply_async((watcher.pk, ), queue=servername)
+
+                self.stdout.write(self.style.SUCCESS(
+                    '[+] Successfully started watching "%s".' % servername))
+
+            elif command == 'stop':
+                try:
+                    print "stopping"
+                    subprocess.call(["pkill", "-9", "-f", servername], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    print "done"
+                    self.stdout.write(self.style.WARNING(
+                        '[+] Successfully killed %s' % servername))
+                except Exception, e:
+                    raise CommandError(e)
+
+            elif command == 'restart':
+                try:
+                    cmd_to_kill = "ls %s" % servername
+
+                    subprocess.call(
+                        cmd_to_kill.split())
+                    print 'starting'
+                    management.call_command(
+                        'watcher', servername, '-c', 'start', '--force')
+
+                    self.stdout.write(self.style.WARNING(
+                        '[+] Successfully restarted %s' % servername))
+                except Exception, e:
+                    raise CommandError(e)
+
+            elif command == 'status':
+                to_ping = []
+                if servername not in ['*', 'all']:
+                    to_ping.append('worker@%s' % servername)
+
+                i = inspect(to_ping).ping()
+
+                if i:
+                    self.stdout.write(self.style.SUCCESS(
+                        '[+] Worker "worker@%s" if live.' % servername))
+                else:
+                    self.stdout.write(self.style.WARNING(
+                        '[+] Worker "worker@%s" is dead.' % servername))
+
+        except WatcherConfig.DoesNotExist:
+            ws = WatcherConfig.objects.values_list('server_name', flat=True)
+            raise CommandError(
+                'Watcher "{0}" does not exist.\n'
+                'Available watchers: {1}'.format(servername, list(ws)))
