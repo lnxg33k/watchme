@@ -12,3 +12,4 @@ yara-python
 psutil
 django-autocomplete-light
 django-celery-email
+django_celery_results
