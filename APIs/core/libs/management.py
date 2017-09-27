@@ -35,7 +35,7 @@ def start_beat(log_pid_dir):
     PeriodicTask.objects.get_or_create(
         interval=schedule,
         name='Monitor the watcher.',
-        task='APIs.tasks.test',)
+        task='APIs.tasks.keep_an_eye',)
 
 
 def start_worker(servername, q, log_pid_dir, c=2, command='start'):
