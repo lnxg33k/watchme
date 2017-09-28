@@ -1,8 +1,5 @@
 ## WatchMe (WM)
 ![Start_all_watchers](https://user-images.githubusercontent.com/1170490/30958672-80d8bf36-a446-11e7-9f25-980669eb8a3b.png)
-![Show_all_configs](https://user-images.githubusercontent.com/1170490/30958705-a15057ba-a446-11e7-919c-a4f4f7a3b224.png)
-![Show_all_hits](https://user-images.githubusercontent.com/1170490/30958748-ba0bed8c-a446-11e7-8e5b-e8b557c2e6f8.png)
-![Show_single_hit](https://user-images.githubusercontent.com/1170490/30958773-d168c5e0-a446-11e7-8a55-12400d734082.png)
 
 ## What is WatchMe?
 WatchMe is a high level file system watcher built in top of watchdog python module for watching file changes on a specific path and give alerts based on an event.
@@ -65,6 +62,11 @@ For more help, you can run
 python manage.py watcher -h
 python manage.py config -h
 ```
+
+# Images
+![Show_all_configs](https://user-images.githubusercontent.com/1170490/30958705-a15057ba-a446-11e7-919c-a4f4f7a3b224.png)
+![Show_all_hits](https://user-images.githubusercontent.com/1170490/30958748-ba0bed8c-a446-11e7-8e5b-e8b557c2e6f8.png)
+![Show_single_hit](https://user-images.githubusercontent.com/1170490/30958773-d168c5e0-a446-11e7-8a55-12400d734082.png)
 
 ## TODO
 - [x] Add an alerting functionality.
