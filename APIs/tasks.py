@@ -233,5 +233,8 @@ def watch(self, watcher_id):
 @shared_task(bind=True)
 def keep_an_eye(self, *args, **kwargs):
     for w in WatcherConfig.objects.filter(needs_restart=True, is_up=False):
-        management.call_command(
-            'watcher', '-c', 'start', '-s', w.server_name)
+        try:
+            management.call_command(
+                'watcher', '-c', 'start', '-s', w.server_name)
+        except Exception, e:
+            print str(e)
