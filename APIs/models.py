@@ -1,12 +1,13 @@
 from __future__ import unicode_literals
 
-from django.db import models
-from django.utils.html import format_html, format_html_join
-from django.template.defaultfilters import truncatechars
 from django.core.urlresolvers import reverse
-
+from django.db import models
+from django.template.defaultfilters import truncatechars
+from django.utils.html import format_html, format_html_join
 
 from APIs.validators import validators
+
+# from APIs.tasks import sendAlert
 
 
 class Tag(models.Model):
@@ -24,8 +25,22 @@ class Tag(models.Model):
         return self.name
 
 
+class WhiteListedHash(models.Model):
+    """(WhiteListedHashes description)"""
+    sha256sum = models.CharField(max_length=256)
+    description = models.TextField(blank=True)
+
+    def __unicode__(self):
+        return self.sha256sum
+
+
 class WatcherConfig(models.Model):
+    technique_choices = (
+        ('walker', 'walker'),
+        ('watchdog', 'watchdog')
+    )
     created = models.DateTimeField(auto_now_add=True)
+    technique = models.CharField(choices=technique_choices, max_length=20)
     server_name = models.CharField(
         'Server name', max_length=50, unique=True,
         help_text="This is an identifier for the mount you"
@@ -51,6 +66,8 @@ class WatcherConfig(models.Model):
 
     tags = models.ManyToManyField('Tag', blank=True)
 
+    WhiteListedHashes = models.ManyToManyField('WhiteListedHash', blank=True)
+
     allow_alerting = models.BooleanField(
         'Send email alerts',
         default=True, help_text="Send an email alert when an event triggers.")
@@ -72,6 +89,11 @@ class WatcherConfig(models.Model):
         verbose_name = "Watcher"
         verbose_name_plural = "Watchers"
 
+    def save(self, *args, **kwargs):
+        if self.technique == 'walker':
+            self.patterns = self.patterns.replace('*', '')
+        super(WatcherConfig, self).save(*args, **kwargs)
+
     def __str__(self):
         return self.server_name
 
@@ -79,7 +101,8 @@ class WatcherConfig(models.Model):
 class Hit(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     src_path = models.CharField("Path", max_length=250)
-    event_type = models.CharField("Evenet type", max_length=200)
+    event_type = models.CharField(
+        "Evenet type", max_length=200, null=True, blank=True)
     md5sum = models.CharField('MD5', blank=True, null=True, max_length=50)
     sha256sum = models.CharField(
         'SHA256', blank=True, null=True, max_length=256)
@@ -91,6 +114,7 @@ class Hit(models.Model):
         'File extension', null=True, blank=True, max_length=50)
     fileContent = models.TextField('File content', null=True, blank=True)
     wasSeenBefore = models.BooleanField('Was seen before', default=False)
+    emailWasSent = models.BooleanField('An alert was sent?', default=False)
     is_malicious = models.BooleanField('Is malicious', default=False)
     yara_tags = models.CharField('Yara tags',
                                  max_length=50, null=True, blank=True)
@@ -113,20 +137,25 @@ class Hit(models.Model):
             hits = Hit.objects.filter(
                 sha256sum=self.sha256sum).exclude(pk=self.pk)
             return format_html_join(
-                ', ', '<a href="{}">{}</a>',
+                ' ', '<a href="{}">({}:{})</a>',
                 (
                     (
                         reverse(
                             'admin:%s_%s_change' % (
                                 self._meta.app_label, self._meta.model_name),
                             args=[h.id]),
-
+                        h.watcher.server_name,
                         h.src_path
                     ) for h in hits
                 )
             )
         else:
             return
+
+    def save(self, *args, **kwargs):
+        if Hit.objects.filter(sha256sum=self.sha256sum).exists():
+            self.wasSeenBefore = True
+        super(Hit, self).save(*args, **kwargs)
 
     @property
     def short_fileType(self):

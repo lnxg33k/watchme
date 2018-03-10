@@ -1,17 +1,15 @@
-from django.core.management.base import BaseCommand, CommandError
-from django.core.exceptions import ValidationError
+from celery.task.control import inspect
 from django.core import management
+from django.core.exceptions import ValidationError
+from django.core.management.base import BaseCommand, CommandError
 
-from watchMe.settings import CELERY_BROKER_URL, CELERY_PID_LOGS
+from APIs.core.libs.management import (get_available_watchers, kill_worker,
+                                       rabbitMQstatus, start_beat,
+                                       start_worker, status_worker)
 from APIs.models import WatcherConfig
 from APIs.tasks import watch
 from APIs.validators import validators
-from APIs.core.libs.management import (
-    kill_worker, start_worker, status_worker, rabbitMQstatus,
-    get_available_watchers, start_beat)
-
-from celery.task.control import inspect
-
+from watchMe.settings import CELERY_BROKER_URL, CELERY_PID_LOGS
 
 rmq = rabbitMQstatus(CELERY_BROKER_URL)
 
@@ -40,6 +38,11 @@ class Command(BaseCommand):
             help="The servername you already set when adding the watcher.")
 
         parser.add_argument(
+            '-t', '--technique', required=True,
+            choices=['walker', 'watchdog'],
+            help="Either run using watchdog or walker.")
+
+        parser.add_argument(
             '-f', '--force', action='store_true', dest='force',
             help='Force executing the command.')
 
@@ -48,6 +51,7 @@ class Command(BaseCommand):
         force = options['force']
         command = options['command']
         auto_start = options['auto']
+        technique = options['technique']
         # verbosity = options['verbosity']
         if auto_start:
             if command != 'status':
@@ -70,14 +74,15 @@ class Command(BaseCommand):
                     if watchers:
                         try:
                             management.call_command(
-                                'watcher', '-c', 'start', '-s', 'main')
+                                'watcher', '-c', 'start',
+                                '-t', technique, '-s', 'main')
                         except Exception as exc:
                             self.stdout.write(self.style.ERROR(
                                 exc))
                         for watcher in watchers:
                             try:
                                 management.call_command(
-                                    'watcher', '-c', 'start',
+                                    'watcher', '-c', 'start', '-t', technique,
                                     '-s', watcher.server_name, '--force')
                             except Exception as exc:
                                 self.stdout.write(self.style.ERROR(
@@ -175,7 +180,8 @@ class Command(BaseCommand):
                             q=servername, log_pid_dir=CELERY_PID_LOGS)
 
                 if servername != 'main':
-                    watch.apply_async((watcher.pk, ), queue=servername)
+                    watch.apply_async(
+                        (watcher.pk, technique), queue=servername)
                     watcher.is_up = True
                     watcher.needs_restart = False
                     watcher.exception = None
@@ -195,7 +201,8 @@ class Command(BaseCommand):
                     if r.get('status') is 'up':
                         for watcher in r.get('active_workers'):
                             management.call_command(
-                                'watcher', '-s', watcher, '-c', 'stop'
+                                'watcher', '-s', watcher,
+                                '-c', 'stop', '-t', technique
                             )
                         kill_worker('celerybeat', log_pid_dir=CELERY_PID_LOGS)
                         return
@@ -208,10 +215,10 @@ class Command(BaseCommand):
                     servername=servername, log_pid_dir=CELERY_PID_LOGS)
                 if s.get('status') is 'ok':
                     if servername and servername not in ('main', 'celerybeat'):
-                            watcher = WatcherConfig.objects.get(
-                                server_name=servername)
-                            watcher.is_up = False
-                            watcher.save()
+                        watcher = WatcherConfig.objects.get(
+                            server_name=servername)
+                        watcher.is_up = False
+                        watcher.save()
                     self.stdout.write(self.style.WARNING(
                         '[!] %s' % s.get('msg')))
                 else:
@@ -238,28 +245,34 @@ class Command(BaseCommand):
                         if servername:
                             # Stop the main worker
                             management.call_command(
-                                'watcher', '-s', 'main', '-c', 'stop'
+                                'watcher', '-s', 'main',
+                                '-c', 'stop', '-t', technique
                             )
                             # Start the main worker
                             management.call_command(
-                                'watcher', '-s', 'main', '-c', 'start'
+                                'watcher', '-s', 'main',
+                                '-c', 'start', '-t', technique
                             )
 
                         # Restart main worker first
                         management.call_command(
-                            'watcher', '-s', 'main', '-c', 'stop'
+                            'watcher', '-s', 'main',
+                            '-c', 'stop', '-t', technique
                         )
                         management.call_command(
-                            'watcher', '-s', 'main', '-c', 'start'
+                            'watcher', '-s', 'main',
+                            '-c', 'start', '-t', technique
                         )
                         active_workers = r.get('active_workers')
                         active_workers.remove('main')
                         for watcher in active_workers:
                             management.call_command(
-                                'watcher', '-s', watcher, '-c', 'stop'
+                                'watcher', '-s', watcher,
+                                '-c', 'stop', '-t', technique
                             )
                             management.call_command(
-                                'watcher', '-s', watcher, '-c', 'start'
+                                'watcher', '-s', watcher, '-c',
+                                'start', '-t', technique
                             )
                         return
 
@@ -272,25 +285,23 @@ class Command(BaseCommand):
                         #     )
 
                         management.call_command(
-                            'watcher', '-s', servername, '-c', 'stop'
+                            'watcher', '-s', servername,
+                            '-c', 'stop', '-t', technique
                         )
 
                     except Exception:
                         pass
 
-                    cmd_args = ['-s', servername, '-c', 'start']
+                    cmd_args = [
+                        '-s', servername, '-c', 'start', '-t', technique]
 
                     if force:
                         cmd_args.append('--force')
 
-                    # if servername != 'main':
-                    #     # Start the main worker
-                    #     management.call_command(
-                    #         'watcher', '-s', 'main', '-c', 'start'
-                    #     )
                     if status_worker('main').get('status') is 'down':
                         management.call_command(
-                            'watcher', '-s', 'main', '-c', 'start'
+                            'watcher', '-s', 'main',
+                            '-c', 'start', '-t', technique
                         )
                     management.call_command('watcher', *cmd_args)
 
@@ -317,7 +328,7 @@ class Command(BaseCommand):
                         if auto_start:
                             management.call_command(
                                 'watcher', '-s', servername,
-                                '-c', 'start', force=force
+                                '-c', 'start', '-t', technique, force=force
                             )
                 else:
                     watchers = get_available_watchers()
@@ -328,7 +339,8 @@ class Command(BaseCommand):
                         # if verbosity >= 2:
                         for watcher in watchers.get('watchers'):
                             management.call_command(
-                                'watcher', '-s', watcher, '-c', 'status',
+                                'watcher', '-s', watcher,
+                                '-c', 'status', '-t', technique,
                                 auto=auto_start, force=force
                             )
                             # sw = status_worker(watcher)
