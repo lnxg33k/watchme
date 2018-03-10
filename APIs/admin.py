@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 
+from dal import autocomplete
 from django import forms
 from django.contrib import admin
 
-from APIs.models import WatcherConfig, Hit, Tag
+from APIs.models import Hit, Tag, WatcherConfig, WhiteListedHash
 from APIs.widgets import HtmlEditor
-
-from dal import autocomplete
 
 # admin.site.register(WatcherConfig)
 # admin.site.register(Hit)
@@ -32,7 +31,7 @@ class WatcherConfigAdmin(admin.ModelAdmin):
     form = WatcherConfigAdminForm
 
     list_display = (
-        'server_name', 'share_path', 'patterns',
+        'server_name', 'technique', 'share_path', 'patterns',
         'ignored_patterns', 'allow_alerting', 'is_up',
         'needs_restart', 'get_tags', 'created')
     list_filter = ('patterns', 'tags', 'is_up', 'needs_restart')
@@ -41,6 +40,7 @@ class WatcherConfigAdmin(admin.ModelAdmin):
     inlines = [
         HitInline
     ]
+    filter_horizontal = ('WhiteListedHashes', )
 
     def get_tags(self, obj):
         return ", ".join([p.name for p in obj.tags.all()])
@@ -69,7 +69,9 @@ class HitAdmin(admin.ModelAdmin):
                    'event_type', 'fileExtension', 'wasSeenBefore', 'created')
 
     # raw_id_fields = ('',)
-    readonly_fields = ('matched_files', 'is_malicious', 'wasSeenBefore')
+    readonly_fields = (
+        'matched_files', 'is_malicious',
+        'wasSeenBefore', 'emailWasSent')
     search_fields = ('src_path', 'md5sum', 'sha256sum',
                      'fileType', 'fileContent')
     ordering = ['-created']
@@ -89,7 +91,15 @@ class TagAdmin(admin.ModelAdmin):
     # search_fields = ('',)
 
 
+class WhiteListedHashAdmin(admin.ModelAdmin):
+    '''
+        Admin View for WhiteListedHashes
+    '''
+    list_display = ('sha256sum', )
+
+
 admin.site.register(Tag, TagAdmin)
+admin.site.register(WhiteListedHash, WhiteListedHashAdmin)
 admin.site.register(Hit, HitAdmin)
 admin.site.register(WatcherConfig, WatcherConfigAdmin)
 

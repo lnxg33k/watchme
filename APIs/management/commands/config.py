@@ -16,6 +16,11 @@ class Command(BaseCommand):
             help="his is an identifier for the mount you want to monitor.")
 
         parser.add_argument(
+            '-t', '--technique', required=True,
+            choices=['walker', 'watchdog'],
+            help="Either run using watchdog or walker.")
+
+        parser.add_argument(
             '-sharepath', dest='share_path',
             help="An absolute path for the directory you want to monitor.")
 
@@ -52,6 +57,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         server_name = options['server-name']
+        technique = options['technique']
         share_path = options['share_path']
         patterns = options['patterns']
         ignored_patterns = options['ignored_patterns'] or None
@@ -94,7 +100,8 @@ class Command(BaseCommand):
                 w = WatcherConfig(
                     server_name=server_name, share_path=share_path,
                     patterns=patterns, ignored_patterns=ignored_patterns,
-                    comment=comment, allow_alerting=allow_alerting
+                    comment=comment, allow_alerting=allow_alerting,
+                    technique=technique
                 )
                 w.full_clean()
 

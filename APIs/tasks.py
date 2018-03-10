@@ -1,26 +1,25 @@
-from django.utils.encoding import smart_str
-from django.core.mail import EmailMessage
-from django.core import management
-from django.template.loader import get_template
+import hashlib
+import os
+import subprocess
+import sys
+import threading
+import time
+from datetime import date
 
+import magic
 from celery import shared_task
 from celery.utils.log import get_task_logger
-
-from watchMe.celery import app
-from watchMe.settings import rules, ALERT_EMAIL_FROM, ALERT_EMAIL_TO
-
-from watchdog.observers.polling import PollingObserver as Observer
+from django.core import management
+from django.core.mail import EmailMessage
+from django.template.loader import get_template
+from django.utils.encoding import smart_str
 from watchdog.events import PatternMatchingEventHandler
+from watchdog.observers.polling import PollingObserver as Observer
 
-from APIs.models import WatcherConfig, Hit
-
-import time
-import os
-import sys
-import magic
-import hashlib
-import threading
-import subprocess
+from APIs.core.libs.walker import walk
+from APIs.models import Hit, WatcherConfig
+from watchMe.celery import app
+from watchMe.settings import ALERT_EMAIL_FROM, ALERT_EMAIL_TO, yara_rules
 
 logger = get_task_logger(__name__)
 
@@ -62,6 +61,7 @@ def installThreadExcepthook(watcher_name=None, task_id=None):
 
 
 class MyHandler(PatternMatchingEventHandler):
+
     def __init__(self, patterns=None, watcher_id=None, task_id=None):
         self.watcher_id = watcher_id
         self.task_id = task_id
@@ -94,7 +94,7 @@ class MyHandler(PatternMatchingEventHandler):
 
                 with open(event.src_path, 'rb') as f:
                     f = f.read()
-                    matches = rules.match(data=f)
+                    matches = yara_rules.match(data=f)
                     if matches:
                         tags = ", ".join(i.rule for i in matches)
                         patterns = "\n\n".join(map(
@@ -102,9 +102,6 @@ class MyHandler(PatternMatchingEventHandler):
 
                     md5sum = hashlib.md5(f).hexdigest()
                     sha256sum = hashlib.sha256(f).hexdigest()
-
-                    if Hit.objects.filter(sha256sum=sha256sum).exists():
-                        Hit.objects.filter(pk=h.pk).update(wasSeenBefore=True)
 
                 Hit.objects.filter(pk=h.pk).update(
                     filesize=filesize,
@@ -190,6 +187,9 @@ def sendAlert(self, *args, **kwargs):
     )
     msg.content_subtype = "html"
     msg.send()
+    Hit.objects.filter(pk=hit_pk).update(
+        emailWasSent=True
+    )
 
 
 @shared_task(bind=True)
@@ -205,29 +205,85 @@ def log(self, *args, **kwargs):
 
 
 @shared_task(bind=True)
-def watch(self, watcher_id):
+def watch(self, watcher_id, technique):
     watcher = WatcherConfig.objects.get(pk=watcher_id)
-    patterns = watcher.patterns.split(',')
+    if technique == 'watchdog':
+        patterns = watcher.patterns.split(',')
 
-    event_handler = MyHandler(
-        patterns=patterns, watcher_id=watcher_id, task_id=self.request.id)
-    observer = Observer()
+        event_handler = MyHandler(
+            patterns=patterns, watcher_id=watcher_id, task_id=self.request.id)
+        observer = Observer()
 
-    installThreadExcepthook(
-        watcher_name=watcher.server_name, task_id=self.request.id)
+        installThreadExcepthook(
+            watcher_name=watcher.server_name, task_id=self.request.id)
 
-    observer.schedule(
-        event_handler,
-        path=watcher.share_path,
-        recursive=True,
-    )
-    observer.start()
-    try:
+        observer.schedule(
+            event_handler,
+            path=watcher.share_path,
+            recursive=True,
+        )
+        observer.start()
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            observer.stop()
+        observer.join()
+    elif technique == 'walker':
         while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
+            r = walk(
+                watcher.share_path,
+                rules=yara_rules, extensions=str(watcher.patterns))
+
+            for k, v in r.items():
+                wl = watcher.WhiteListedHashes.filter(
+                    sha256sum=v['sha256sum']).exists()
+                if wl:
+                    continue
+
+                hit_exists = Hit.objects.filter(
+                    src_path=k.split('/')[-1], watcher_id=watcher_id,
+                    md5sum=v['md5sum'],
+                    created__date=date.today(), emailWasSent=True).exists()
+
+                if hit_exists:
+                    continue
+
+                try:
+                    h = Hit(
+                        watcher_id=watcher_id,
+                        src_path=k.split('/')[-1],
+                        filesize=v['filesize'],
+                        fileExtension=v['fileExtension'],
+                        fileContent=smart_str(
+                            v['fileContent'],
+                            encoding='ascii',
+                            errors='ignore'
+                        ),
+                        fileType=v['fileType'],
+                        md5sum=v['md5sum'],
+                        sha256sum=v['sha256sum'],
+                        yara_patterns=v['yara_patterns'],
+                        yara_tags=v['yara_tags'],
+                        is_malicious=True,
+                    )
+                    h.save()
+
+                    if watcher.allow_alerting:
+                        sendAlert.delay(
+                            file_path=k.split('/')[-1],
+                            event_type='created (walker)',
+                            watcher_name=watcher.server_name,
+                            hit_pk=h.pk
+                        )
+
+                except Exception, e:
+                    watcher_name = WatcherConfig.objects.get(
+                        pk=watcher_id).server_name
+                    log.delay(
+                        task_id=self.request.id, watcher_name=watcher_name,
+                        error=e.message, kill=False)
+            time.sleep(5)
 
 
 @shared_task(bind=True)
