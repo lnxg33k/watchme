@@ -62,9 +62,9 @@ class WatcherConfig(models.Model):
         help_text='List of the patterns you may ignore incase the'
         ' patterns field is set to match all files \'*.*\'.')
 
-    comment = models.TextField(blank=True)
+    comment = models.TextField(blank=True, null=True)
 
-    tags = models.ManyToManyField('Tag', blank=True)
+    tags = models.ManyToManyField('Tag', blank=True, null=True)
 
     WhiteListedHashes = models.ManyToManyField('WhiteListedHash', blank=True)
 
