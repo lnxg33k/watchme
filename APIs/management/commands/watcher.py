@@ -266,14 +266,15 @@ class Command(BaseCommand):
                         active_workers = r.get('active_workers')
                         active_workers.remove('main')
                         for watcher in active_workers:
+                            cmd_args = [
+                                '-s', watcher, '-c', 'start', '-t', technique]
+                            if force:
+                                cmd_args.append('--force')
                             management.call_command(
                                 'watcher', '-s', watcher,
                                 '-c', 'stop', '-t', technique
                             )
-                            management.call_command(
-                                'watcher', '-s', watcher, '-c',
-                                'start', '-t', technique
-                            )
+                            management.call_command('watcher', *cmd_args)
                         return
 
                     # This inner exception, the worker my be already down
