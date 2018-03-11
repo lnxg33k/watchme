@@ -58,7 +58,7 @@ target/
 
 virt/
 
-watchMe/APIs/migrations/
+APIs/migrations/*
 .DS_Store
 *.sqlite3
 *.db
