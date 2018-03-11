@@ -17,6 +17,11 @@ class HitInline(admin.TabularInline):
     classes = ['collapse']
 
 
+class WatcherConfigInline(admin.TabularInline):
+    model = WatcherConfig.WhiteListedHashes.through
+    classes = ['collapse']
+
+
 class WatcherConfigAdminForm(forms.ModelForm):
     model = WatcherConfig
 
@@ -96,6 +101,9 @@ class WhiteListedHashAdmin(admin.ModelAdmin):
         Admin View for WhiteListedHashes
     '''
     list_display = ('sha256sum', )
+    inlines = [
+        WatcherConfigInline
+    ]
 
 
 admin.site.register(Tag, TagAdmin)
