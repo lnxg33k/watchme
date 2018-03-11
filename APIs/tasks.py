@@ -244,7 +244,7 @@ def watch(self, watcher_id, technique):
                 hit_exists = Hit.objects.filter(
                     src_path=k.split('/')[-1], watcher_id=watcher_id,
                     md5sum=v['md5sum'],
-                    created__date=date.today(), emailWasSent=True).exists()
+                    emailWasSent=True).exists()
 
                 if hit_exists:
                     continue
