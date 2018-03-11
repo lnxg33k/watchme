@@ -64,7 +64,7 @@ class WatcherConfig(models.Model):
 
     comment = models.TextField(blank=True, null=True)
 
-    tags = models.ManyToManyField('Tag', blank=True, null=True)
+    tags = models.ManyToManyField('Tag', blank=True)
 
     WhiteListedHashes = models.ManyToManyField('WhiteListedHash', blank=True)
 
