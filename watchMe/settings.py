@@ -184,6 +184,9 @@ else:
     # CSRF_COOKIE_HTTPONLY = True
     # X_FRAME_OPTIONS = "DENY"
 
+    # FIXME: MySQL does not allow unique CharFields to have a max_length > 255
+    SILENCED_SYSTEM_CHECKS = ['mysql.E001']
+
     config = RawConfigParser()
     config.read('%s/production_settings.ini' % os.path.expanduser('~'))
 
