@@ -4,7 +4,6 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import date
 
 import magic
 from celery import shared_task
@@ -56,7 +55,9 @@ def installThreadExcepthook(watcher_name=None, task_id=None):
                 w.exception = str(sys.exc_info()[1])
                 w.save()
                 # sys.excepthook(*sys.exc_info())
+
         self.run = run_with_except_hook
+
     threading.Thread.__init__ = init
 
 
@@ -173,13 +174,19 @@ def sendAlert(self, *args, **kwargs):
 
     subject = "WatchMe Alert! - Malicious file was just {0}".format(event_type)
 
+
     msg = EmailMessage(
         subject=subject,
         body=get_template('sendAlert.html').render({
             'file_path': file_path,
             'event_type': event_type,
             'watcher_name': watcher_name,
-            'hit': Hit.objects.get(pk=hit_pk)
+            'hit': Hit.objects.get(pk=hit_pk),
+            'yara_patterns': kwargs.get('yara_patterns'),
+            'yara_tags': kwargs.get('yara_tags'),
+            'file_type': kwargs.get('fileType'),
+            'sha256sum': kwargs.get('sha256sum'),
+            'md5sum': kwargs.get('sha256sum'),
         }),
         from_email=ALERT_EMAIL_FROM,
         to=ALERT_EMAIL_TO,
@@ -271,10 +278,15 @@ def watch(self, watcher_id, technique):
 
                     if watcher.allow_alerting:
                         sendAlert.delay(
-                            file_path=k.split('/')[-1],
+                            file_path="/".join(k.split('/')[-3:]),
                             event_type='created (walker)',
                             watcher_name=watcher.server_name,
-                            hit_pk=h.pk
+                            hit_pk=h.pk,
+                            fileType=v['fileType'],
+                            sha256sum=v['sha256sum'],
+                            md5sum=v['md5sum'],
+                            yara_patterns=v['yara_patterns'],
+                            yara_tags=v['yara_tags'],
                         )
 
                 except Exception, e:
