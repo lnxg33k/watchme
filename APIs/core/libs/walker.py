@@ -17,7 +17,7 @@ def sizeof_fmt(num, suffix='B'):
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
 
-def walk(rootdir, rules, extensions=('.aspx', )):
+def walk(rootdir, rules, extensions=('.aspx', '.cs')):
     r = {}
     if type(extensions) != tuple:
         extensions = tuple(map(str.strip, extensions.split(',')))
