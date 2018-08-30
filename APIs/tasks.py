@@ -8,6 +8,7 @@ import time
 import magic
 from celery import shared_task
 from celery.utils.log import get_task_logger
+from django.contrib.sites.models import Site
 from django.core import management
 from django.core.mail import EmailMessage
 from django.template.loader import get_template
@@ -174,7 +175,6 @@ def sendAlert(self, *args, **kwargs):
 
     subject = "WatchMe Alert! - Malicious file was just {0}".format(event_type)
 
-
     msg = EmailMessage(
         subject=subject,
         body=get_template('sendAlert.html').render({
@@ -187,6 +187,7 @@ def sendAlert(self, *args, **kwargs):
             'file_type': kwargs.get('fileType'),
             'sha256sum': kwargs.get('sha256sum'),
             'md5sum': kwargs.get('sha256sum'),
+            'current_site': Site.objects.get_current().domain
         }),
         from_email=ALERT_EMAIL_FROM,
         to=ALERT_EMAIL_TO,

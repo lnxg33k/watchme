@@ -25,7 +25,6 @@ if socket.gethostname().startswith('ruinedsec'):
 else:
     DEBUG = False
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -37,6 +36,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
     'django_filters',
     'rest_framework',
     'rest_framework.authtoken',
@@ -77,7 +77,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'watchMe.wsgi.application'
 
-
 # Password validation
 # https://docs.djangoproject.com/en/1.9/ref/settings/#auth-password-validators
 
@@ -96,7 +95,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/1.9/topics/i18n/
 
@@ -110,15 +108,13 @@ USE_L10N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.9/howto/static-files/
 
 STATIC_URL = '/assets/'
 
-STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static/'), )
+STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static/'),)
 STATIC_ROOT = os.path.join(BASE_DIR, 'assets/')
-
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
@@ -136,7 +132,6 @@ REST_FRAMEWORK = {
 }
 
 EMAIL_BACKEND = 'djcelery_email.backends.CeleryEmailBackend'
-
 
 CELERY_IGNORE_RESULT = True
 CELERY_RESULT_BACKEND = 'django-db'
@@ -255,3 +250,4 @@ else:
             },
         }
     }
+SITE_ID = 1
