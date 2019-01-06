@@ -28,7 +28,7 @@ ptyprocess==0.5.2
 Pygments==2.2.0
 python-magic==0.4.15
 pytz==2018.3
-PyYAML==3.12
+pyyaml>=4.2b1
 scandir==1.7
 simplegeneric==0.8.1
 six==1.11.0
