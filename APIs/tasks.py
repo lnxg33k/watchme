@@ -1,11 +1,14 @@
 import hashlib
 import os
+import platform
 import subprocess
 import sys
 import threading
 import time
 
 import magic
+from APIs.core.libs.walker import walk
+from APIs.models import Hit, WatcherConfig
 from celery import shared_task
 from celery.utils.log import get_task_logger
 from django.contrib.sites.models import Site
@@ -15,9 +18,6 @@ from django.template.loader import get_template
 from django.utils.encoding import smart_str
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers.polling import PollingObserver as Observer
-
-from APIs.core.libs.walker import walk
-from APIs.models import Hit, WatcherConfig
 from watchMe.celery import app
 from watchMe.settings import ALERT_EMAIL_FROM, ALERT_EMAIL_TO, yara_rules
 
@@ -301,6 +301,19 @@ def watch(self, watcher_id, technique):
 
 @shared_task(bind=True)
 def keep_an_eye(self, *args, **kwargs):
+    # first check if mount points are up,
+    # some times mounted servers are not reponsive
+    if platform.system() == 'Linux':
+        for w in WatcherConfig.objects.all():
+            try:
+                c = subprocess.check_call(
+                    ["timeout", "5", "mountpoint", "-q", w.share_path.rstrip('/')])
+            except subprocess.CalledProcessError:
+                c = 1
+            if c == 1:
+                w.needs_restart = True
+                w.is_up = False
+                w.save()
     for w in WatcherConfig.objects.filter(needs_restart=True, is_up=False):
         try:
             management.call_command(
