@@ -7,6 +7,7 @@ import threading
 import time
 
 import magic
+from APIs.core.libs.helpers import is_valid_mountpoint
 from APIs.core.libs.walker import walk
 from APIs.models import Hit, WatcherConfig
 from celery import shared_task
@@ -305,12 +306,7 @@ def keep_an_eye(self, *args, **kwargs):
     # some times mounted servers are not reponsive
     if platform.system() == 'Linux':
         for w in WatcherConfig.objects.all():
-            try:
-                c = subprocess.check_call(
-                    ["timeout", "5", "mountpoint", "-q", w.share_path.rstrip('/')])
-            except subprocess.CalledProcessError:
-                c = 1
-            if c == 1:
+            if not is_valid_mountpoint(w.share_path.rstrip('/')):
                 w.needs_restart = True
                 w.is_up = False
                 w.save()
