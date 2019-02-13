@@ -313,9 +313,9 @@ def keep_an_eye(self, *args, **kwargs):
     for w in WatcherConfig.objects.filter(needs_restart=True, is_up=False):
         try:
             management.call_command(
-                'watcher', '-c', 'start', '-s', w.server_name, '-t', w.technique)
-            w.needs_restart = False
-            w.is_up = True
-            w.save()
+                'watcher', '-c', 'restart', '-s', w.server_name, '-t', w.technique)
+            # w.needs_restart = False
+            # w.is_up = True
+            # w.save()
         except Exception, e:
             print str(e)
