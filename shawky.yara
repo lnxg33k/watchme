@@ -21,8 +21,9 @@ rule ClassicASP : webshell
 		$a = /eval\s*\(/	wide ascii nocase
 		$b = /language\s*=\s*("|'|)\s*/ wide ascii nocase
 		$c = /language\s*=\s*("|'|)\s*c#/ wide ascii nocase
+		$d = /unsafe/ fullword ascii wide nocase
 	condition:
-		$a and ($b and not $c)
+		$a and ($b and not $c) and $d
 }
 
 rule NameSpaces : webshell
