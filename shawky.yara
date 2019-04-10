@@ -39,6 +39,8 @@ rule NameSpaces : webshell
 		$d = "System.Reflection" wide ascii fullword
 		$e = "System.IO" wide ascii fullword
 		$f = "System.Data.SqlClient" wide ascii fullword
+		$g = "System.Runtime" wide ascii fullword
+		$h = "System.Management" wide ascii fullword
 	condition:
 		any of them
 }
