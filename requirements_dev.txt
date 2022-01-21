@@ -13,7 +13,7 @@ django-celery-results==1.0.1
 django-filter==1.1.0
 djangorestframework==3.11.2
 enum34==1.1.6
-ipython==5.5.0
+ipython==7.16.3
 ipython-genutils==0.2.0
 kombu==4.1.0
 pathlib2==2.3.0
