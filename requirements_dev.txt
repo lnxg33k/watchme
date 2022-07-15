@@ -9,7 +9,7 @@ django-appconf==1.0.2
 django-autocomplete-light==3.2.10
 django-celery-beat==1.1.1
 django-celery-email==2.0.0
-django-celery-results==1.0.1
+django-celery-results==2.4.0
 django-filter==1.1.0
 djangorestframework==3.11.2
 enum34==1.1.6
